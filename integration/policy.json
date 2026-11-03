@@ -1,0 +1,10 @@
+{
+  "compactionCheckpoints": [2, 5, 10, 20],
+  "trendSamples": 5,
+  "inputGrowthRatio": 2,
+  "speedRatio": 0.6,
+  "latencyRatio": 1.5,
+  "trafficWindowSeconds": 1800,
+  "trafficUploadBytes": 1073741824,
+  "reminderCooldownSeconds": 900
+}

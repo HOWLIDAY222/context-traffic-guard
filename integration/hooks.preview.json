@@ -1,0 +1,95 @@
+{
+  "description": "会话压缩、Token、请求速率和本机代理流量监测；仅提醒，不阻断。待审核，未启用。",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreModelRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostModelRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3,
+            "additionalContextLimit": 512
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3,
+            "additionalContextLimit": 512
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node --no-warnings \"<ABSOLUTE_SKILL_DIR>/scripts/guard.mjs\" hook --state-dir \"<ABSOLUTE_STATE_DIR>\" --policy \"<ABSOLUTE_SKILL_DIR>/integration/policy.json\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}

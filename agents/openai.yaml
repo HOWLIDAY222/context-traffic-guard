@@ -1,0 +1,7 @@
+interface:
+  display_name: "会话负担监测与交接"
+  short_description: "监测压缩次数、Token、流量和请求速率，按趋势提醒交接新对话"
+  default_prompt: "使用 $context-traffic-guard 查看本会话监测状态，依据实测指标判断交接时机并准备摘要。"
+
+policy:
+  allow_implicit_invocation: true

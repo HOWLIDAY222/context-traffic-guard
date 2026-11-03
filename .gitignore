@@ -1,0 +1,18 @@
+# Local monitoring state and private configuration
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.jsonl
+*.log
+.env
+.env.*
+auth.json
+hooks.json
+config.toml
+context-traffic-guard-state/
+verification/
+backups/
+node_modules/
+.DS_Store
+Thumbs.db
