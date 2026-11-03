@@ -1,0 +1,16 @@
+{
+  "name": "context-traffic-guard",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "build": "vite build --config dashboard/vite.config.mjs",
+    "test": "node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs",
+    "panel": "node --no-warnings scripts/dashboard.mjs"
+  },
+  "devDependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "vite": "8.3.5"
+  }
+}

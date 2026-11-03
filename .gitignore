@@ -16,3 +16,5 @@ backups/
 node_modules/
 .DS_Store
 Thumbs.db
+# Frontend development dependencies; prebuilt dashboard/dist is distributed.
+node_modules/

@@ -188,7 +188,7 @@ export function ingest(db, event, now = Date.now(), mono = Number(process.hrtime
   });
   return s;
 }
-function comparableKey(r) {
+export function comparableKey(r) {
   const bucket = n => Math.floor(Math.log2(Math.max(n,1)));
   const fraction = (n,d) => n === null ? 'unknown' : Math.min(3,Math.floor(n / Math.max(d,1) * 4));
   return [r.model,r.effort??'unknown',r.timing_kind??'hook_pair',bucket(r.input_tokens),bucket(r.output_tokens),

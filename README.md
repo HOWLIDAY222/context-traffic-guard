@@ -12,6 +12,7 @@ Client-independent context monitoring and handoff assistance, with Codex, Claude
 - 可选读取 Windows、macOS、Linux 的系统网卡计数，明确选择一张接口；无需 Clash 或其他代理软件。
 - 使用兼容代理的用户还可选择本机 Mihomo 接口，支持命名管道、Unix socket 和回环 HTTP，采用事件采样，无自动常驻后台进程。
 - 合并重复提醒，在任务可恢复的阶段准备交接；采集失败不阻塞任务。
+- 本地监测面板提供会话选择、四类真实趋势、提醒依据与数据缺口，以及可编辑、复制和下载的交接摘要。读取记录不调用模型。
 
 ## 客户端支持
 
@@ -43,13 +44,29 @@ Client-independent context monitoring and handoff assistance, with Codex, Claude
 
 [三平台测试](https://github.com/HOWLIDAY222/context-traffic-guard/actions/workflows/test.yml)检查核心逻辑、客户端契约回放、CLI 输入输出、计数解析和真实网卡枚举。**协议回放不等于真实模型集成测试**：实时接入目前只有此前 Windows Codex 验证；Claude/Gemini/Grok 需在实际宿主中核对回调与显示。其他代理软件只有提供兼容接口时才能使用代理适配器，不保证任意软件都提供单进程流量。
 
-## 安装
+## 本地监测面板
+
+仓库附带预构建界面，只需 Node.js 24，无需安装 React、Clash 或前端开发工具。在仓库目录运行：
+
+```sh
+node --no-warnings scripts/dashboard.mjs --state-dir "<STATE_DIR>"
+```
+
+在浏览器打开 **http://127.0.0.1:43871**，选择明确的客户端与会话。已有 Codex 安装的状态目录通常为 ~/.codex/context-traffic-guard-state；新通用接入通常为 ~/.context-traffic-guard，以实际采集器配置为准。目录不存在时显示接入引导，不创建数据库、不生成演示数据。
+
+- **会话总览**：压缩次数、输入与缓存、可比请求速率、采样窗上传；切换输入、耗时、速率、网络趋势，查看最近请求。
+- **诊断与依据**：展示观测信号、数据缺口、覆盖范围与下一步；不能仅凭一次高用量确定原因。
+- **交接工作台**：当前 Agent 可提供绑定会话的任务草稿，也可手动编辑；监测信息自动带入，复制或下载 Markdown 后交给新对话。
+
+面板仅监听本机回环，默认每 5 秒读一次本地记录，可暂停；不修改 Hooks、不启动流量采样、不自动切换对话。停止启动命令即可关闭服务。明确选择当前窗口、传入 Agent 草稿及开发构建方法见 [面板说明](references/dashboard.md)。
+
+## 安装与接入 Skill
 
 1. 克隆仓库，按 [客户端目录表](references/clients.md#安装-skill) 放置完整 Skill。若目录已有内容，先备份并比较。
 2. 先运行测试：
 
    ```sh
-   node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs
+   node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs
    ```
 
 3. 使用配置生成器选择客户端并打印草案。例如 Claude Code：

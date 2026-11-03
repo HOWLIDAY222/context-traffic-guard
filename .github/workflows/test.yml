@@ -23,4 +23,10 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs
+      - run: node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs
+      - name: Rebuild distributed dashboard
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          npx --yes pnpm@11.25.0 install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@11.25.0 build
+          git diff --exit-code -- dashboard/dist
