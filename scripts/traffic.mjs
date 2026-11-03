@@ -1,13 +1,27 @@
 import http from 'node:http';
-import { resolve } from 'node:path';
+import { resolve, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { openStore } from './guard.mjs';
 
-export function readConnections(pipe,timeout=1500) {
-  if(process.platform==='win32' && !pipe.startsWith('\\\\.\\pipe\\')) throw new Error('local named pipe required');
+export function localRequestOptions(target,platform=process.platform) {
+  if(typeof target!=='string'||!target) throw new Error('explicit local endpoint required');
+  const base={path:'/connections',method:'GET',agent:false};
+  if(/^https?:/i.test(target)) {
+    const url=new URL(target);
+    if(url.protocol!=='http:'||!['127.0.0.1','localhost','[::1]'].includes(url.hostname)||
+      url.username||url.password||url.search||url.hash||url.pathname!=='/')
+      throw new Error('plain loopback HTTP endpoint without credentials required');
+    return {...base,hostname:url.hostname.replace(/^\[|\]$/g,''),port:url.port||80};
+  }
+  if(platform==='win32'?!target.startsWith('\\\\.\\pipe\\'):!posix.isAbsolute(target))
+    throw new Error('explicit local IPC path required');
+  return {...base,socketPath:target};
+}
+export function readConnections(target,timeout=1500) {
+  const options=localRequestOptions(target);
   return new Promise((yes,no)=>{
-    const req=http.request({socketPath:pipe,path:'/connections',method:'GET',agent:false},res=>{
+    const req=http.request(options,res=>{
       let body='',bytes=0;
       res.setEncoding('utf8');
       res.on('data',chunk=>{
@@ -21,7 +35,8 @@ export function readConnections(pipe,timeout=1500) {
         if(res.statusCode!==200) return no(new Error('local API unavailable'));
         try {
           const v=JSON.parse(body);
-          if(!Number.isFinite(v.uploadTotal)||!Number.isFinite(v.downloadTotal)||!Array.isArray(v.connections))
+          if(!Number.isSafeInteger(v.uploadTotal)||v.uploadTotal<0||
+            !Number.isSafeInteger(v.downloadTotal)||v.downloadTotal<0||!Array.isArray(v.connections))
             throw new Error('unsupported counters');
           yes(v);
         } catch(e) {no(e);}
@@ -49,7 +64,8 @@ export function advance(previous,snapshot,totals) {
 async function main() {
   const a={};
   for(let i=2;i<process.argv.length;i+=2) a[process.argv[i].replace(/^--/,'')]=process.argv[i+1];
-  if(!a['state-dir']||!a.pipe) throw new Error('state directory and local pipe required');
+  const endpoint=a.pipe??a.socket??a.endpoint;
+  if(!a['state-dir']||!endpoint) throw new Error('state directory and explicit local endpoint required');
   const db=openStore(resolve(a['state-dir']));
   const seconds=Number(a.seconds??30), interval=Number(a['interval-ms']??1000), idle=Number(a['idle-seconds']??0);
   if(!(seconds>0&&seconds<=86400&&interval>=250&&interval<=10000)) throw new Error('invalid sampling bounds');
@@ -70,7 +86,7 @@ async function main() {
         if(!pending&&Date.now()-recent>idle*1000) break;
       }
       try {
-        const snap=await readConnections(a.pipe);
+        const snap=await readConnections(endpoint);
         if(last&&(snap.uploadTotal<last.uploadTotal||snap.downloadTotal<last.downloadTotal)) {
           resets++;
           segment=randomUUID();previous=null;totals={codex_up:0,codex_down:0,sampled_up:0,sampled_down:0};
@@ -83,7 +99,7 @@ async function main() {
         const ts=Date.now();
         db.prepare('INSERT INTO traffic(ts,segment,kernel_up,kernel_down,codex_up,codex_down,sampled_up,sampled_down,source) VALUES(?,?,?,?,?,?,?,?,?)')
           .run(ts,segment,snap.uploadTotal,snap.downloadTotal,totals.codex_up,totals.codex_down,
-            totals.sampled_up,totals.sampled_down,'mihomo_local_pipe');
+            totals.sampled_up,totals.sampled_down,'mihomo_local_api');
         first??={ts,up:snap.uploadTotal,down:snap.downloadTotal};
         last={ts,up:snap.uploadTotal,down:snap.downloadTotal,uploadTotal:snap.uploadTotal,downloadTotal:snap.downloadTotal};
         samples++;

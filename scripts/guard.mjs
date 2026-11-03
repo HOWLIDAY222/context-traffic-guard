@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { readConnections, advance } from './traffic.mjs';
 
 export const DEFAULTS = {
@@ -175,13 +175,19 @@ export function summarize(db, session, agent = 'root', now = Date.now(), policy 
   }
   const trafficRows = db.prepare('SELECT * FROM traffic WHERE ts>=? ORDER BY ts')
     .all(now-policy.trafficWindowSeconds*1000);
-  const t1=trafficRows.at(-1), t0=t1 ? trafficRows.find(r=>r.segment===t1.segment) : null;
-  let traffic = {status:'unavailable',scope:'all local Mihomo traffic; process samples span all chats'};
+  const t1=trafficRows.at(-1), t0=t1 ? trafficRows.find(r=>r.segment===t1.segment&&r.source===t1.source) : null;
+  const system=t1?.source.startsWith('system|'), sourceParts=system?t1.source.split('|'):[];
+  let traffic = {status:'unavailable',provider:null,scope:'no traffic source observed; context monitoring is independent'};
+  if(t1) traffic={...traffic,provider:system?'system_interface':'mihomo',
+    scope:system?'selected network interface; all programs and all chats; no process attribution':
+      'all local Mihomo traffic; process samples span all chats',
+    ...(system?{platform:sourceParts[1],interface:decodeURIComponent(sourceParts[2])}:{})};
   if(t0 && t1 && t1.ts>t0.ts && t0.segment===t1.segment) {
     traffic={...traffic,status:'measured',seconds:(t1.ts-t0.ts)/1000,
       kernel_upload_bytes:t1.kernel_up-t0.kernel_up,kernel_download_bytes:t1.kernel_down-t0.kernel_down,
-      codex_chatgpt_upload_lower_bound:t1.codex_up-t0.codex_up,
-      codex_chatgpt_download_lower_bound:t1.codex_down-t0.codex_down,
+      upload_bytes:t1.kernel_up-t0.kernel_up,download_bytes:t1.kernel_down-t0.kernel_down,
+      codex_chatgpt_upload_lower_bound:system?null:t1.codex_up-t0.codex_up,
+      codex_chatgpt_download_lower_bound:system?null:t1.codex_down-t0.codex_down,
       freshness_seconds:(now-t1.ts)/1000,source:t1.source};
     if(traffic.freshness_seconds>10) traffic.status='stale';
   }
@@ -197,8 +203,8 @@ export function summarize(db, session, agent = 'root', now = Date.now(), policy 
     alerts.push({key:'speed_drop',kind:'request_speed',severity:'handoff',
       message:'可比请求的有效输出速率降至基线约 '+Math.round(speed.ratio*100)+'%；原因未确定。'});
   if(traffic.status==='measured' && traffic.kernel_upload_bytes>=policy.trafficUploadBytes)
-    alerts.push({key:'traffic:'+Math.floor(now/(policy.trafficWindowSeconds*1000)),kind:'traffic',severity:'review',
-      message:'本机代理在该采样窗上传约 '+(traffic.kernel_upload_bytes/1073741824).toFixed(2)+' GiB，不能全部归到本会话。'});
+    alerts.push({key:'traffic:'+t1.source+':'+Math.floor(now/(policy.trafficWindowSeconds*1000)),kind:'traffic',severity:'review',
+      message:(system?'所选网卡':'本机代理')+'在该采样窗上传约 '+(traffic.kernel_upload_bytes/1073741824).toFixed(2)+' GiB，包含其他程序或会话的流量。'});
   const failures=rows.filter(r=>r.status==='failed');
   if(failures.some(r=>r.error_category==='rate_limit'))
     alerts.push({key:'rate_limit_observed',kind:'rate_limit',severity:'review',message:'模型请求明确返回过限速错误；与上下文因果关系未确定。'});
@@ -250,9 +256,10 @@ export function loadPolicy(path) {
   }
   return result;
 }
-export function storeTrafficSnapshot(db,snapshot,ts=Date.now()) {
+export function storeTrafficSnapshot(db,snapshot,ts=Date.now(),source='mihomo_event_sample') {
   transaction(db,()=>{
-    const row=db.prepare('SELECT value FROM runtime WHERE key=\'traffic_cursor\'').get();
+    const cursorKey=source==='mihomo_event_sample'?'traffic_cursor':'traffic_cursor:'+source;
+    const row=db.prepare('SELECT value FROM runtime WHERE key=?').get(cursorKey);
     const old=row?JSON.parse(row.value):null;
     if(old&&ts<=old.ts) return;
     const reset=!old||snapshot.uploadTotal<old.kernel_up||snapshot.downloadTotal<old.kernel_down;
@@ -266,18 +273,37 @@ export function storeTrafficSnapshot(db,snapshot,ts=Date.now()) {
     }
     const cursor={ts,segment,kernel_up:snapshot.uploadTotal,kernel_down:snapshot.downloadTotal,
       totals,connections:[...next]};
-    db.prepare('INSERT OR REPLACE INTO runtime(key,value) VALUES(\'traffic_cursor\',?)')
-      .run(JSON.stringify(cursor));
+    db.prepare('INSERT OR REPLACE INTO runtime(key,value) VALUES(?,?)')
+      .run(cursorKey,JSON.stringify(cursor));
     db.prepare('INSERT INTO traffic(ts,segment,kernel_up,kernel_down,codex_up,codex_down,sampled_up,sampled_down,source) VALUES(?,?,?,?,?,?,?,?,?)')
       .run(ts,segment,snapshot.uploadTotal,snapshot.downloadTotal,totals.codex_up,totals.codex_down,
-        totals.sampled_up,totals.sampled_down,'mihomo_event_sample');
+        totals.sampled_up,totals.sampled_down,source);
+    db.prepare('DELETE FROM traffic WHERE ts<?').run(ts-7200000);
+  });
+}
+export function storeSystemSnapshot(db,snapshot,ts=Date.now()) {
+  if(!['win32','darwin','linux'].includes(snapshot.platform)||typeof snapshot.name!=='string'||
+    !snapshot.name||snapshot.name.length>256||
+    ![snapshot.uploadTotal,snapshot.downloadTotal].every(n=>Number.isSafeInteger(n)&&n>=0))
+    throw new Error('invalid system interface counters');
+  const source='system|'+snapshot.platform+'|'+encodeURIComponent(snapshot.name), key='traffic_cursor:'+source;
+  transaction(db,()=>{
+    const row=db.prepare('SELECT value FROM runtime WHERE key=?').get(key), old=row?JSON.parse(row.value):null;
+    if(old&&ts<=old.ts) return;
+    const reset=!old||snapshot.uploadTotal<old.up||snapshot.downloadTotal<old.down;
+    const segment=reset?randomUUID():old.segment;
+    db.prepare('INSERT OR REPLACE INTO runtime(key,value) VALUES(?,?)')
+      .run(key,JSON.stringify({ts,segment,up:snapshot.uploadTotal,down:snapshot.downloadTotal}));
+    db.prepare('INSERT INTO traffic(ts,segment,kernel_up,kernel_down,codex_up,codex_down,sampled_up,sampled_down,source) VALUES(?,?,?,?,?,?,?,?,?)')
+      .run(ts,segment,snapshot.uploadTotal,snapshot.downloadTotal,null,null,null,null,source);
     db.prepare('DELETE FROM traffic WHERE ts<?').run(ts-7200000);
   });
 }
 async function sampleTraffic(db,pipe) {
-  const row=db.prepare('SELECT value FROM runtime WHERE key=\'traffic_cursor\'').get();
+  const source='mihomo_event_sample:'+createHash('sha256').update(pipe).digest('hex').slice(0,16);
+  const row=db.prepare('SELECT value FROM runtime WHERE key=?').get('traffic_cursor:'+source);
   if(row&&Date.now()-JSON.parse(row.value).ts<500) return;
-  try {storeTrafficSnapshot(db,await readConnections(pipe,150));}
+  try {storeTrafficSnapshot(db,await readConnections(pipe,150),Date.now(),source);}
   catch {} // A missing local counter must never delay or block the business task.
 }
 function argumentsOf(args) {
@@ -304,7 +330,8 @@ async function main() {
         chunks.push(chunk);
       }
       const event=JSON.parse(Buffer.concat(chunks).toString('utf8')), s=ingest(db,event);
-      if(a.sampleTraffic&&a.pipe) await sampleTraffic(db,a.pipe);
+      const endpoint=a.pipe??a.socket??a.endpoint;
+      if(a.sampleTraffic&&endpoint) await sampleTraffic(db,endpoint);
       if(['PostCompact','PostToolUse','UserPromptSubmit','Stop'].includes(event.hook_event_name)) {
         const report=summarize(db,s.session,s.agent,Date.now(),policy);
         process.stdout.write(JSON.stringify(hookOutput(db,event,report,Date.now(),policy)));
