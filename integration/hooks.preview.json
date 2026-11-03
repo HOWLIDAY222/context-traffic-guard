@@ -1,5 +1,5 @@
 {
-  "description": "会话压缩、Token、请求速率和本机代理流量监测；仅提醒，不阻断。待审核，未启用。",
+  "description": "仅供 Codex 的兼容模板；其他客户端用 scripts/configure.mjs 生成配置。仅提醒，不阻断，待审核。",
   "hooks": {
     "SessionStart": [
       {

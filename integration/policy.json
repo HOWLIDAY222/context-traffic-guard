@@ -6,5 +6,6 @@
   "latencyRatio": 1.5,
   "trafficWindowSeconds": 1800,
   "trafficUploadBytes": 1073741824,
-  "reminderCooldownSeconds": 900
+  "reminderCooldownSeconds": 900,
+  "contextUsedPercent": 80
 }

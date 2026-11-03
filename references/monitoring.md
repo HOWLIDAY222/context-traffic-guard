@@ -1,8 +1,12 @@
 # 接入与指标说明
 
+本文件描述共用的数值与网络采样。客户端安装、能力差异与配置生成见 [clients.md](clients.md)；自建 Agent 通过 [events.md](events.md) 接入。下表中的 PreModelRequest 等名称是内部/Codex 兼容事件，不表示其他宿主提供同名接口。
+
 ## 实现分工
 
-- scripts/guard.mjs hook：接收官方生命周期事件，使用本地 SQLite 按会话和可取得的代理标识分别记账。来源没有提供代理标识时，不能保证区分子代理，报告会标明覆盖。失败返回空 JSON，不阻止请求或工具。
+- scripts/adapters.mjs：将 Codex、Claude Code、Gemini CLI、Grok 或通用 v1 事件转换为内部数值事件，过滤任务正文，并按客户端真实支持的渠道格式化提醒。
+- scripts/guard.mjs hook：接收生命周期事件，使用本地 SQLite 按客户端、会话和可取得的代理标识分别记账。来源没有提供代理标识时，不能保证区分子代理，报告会标明覆盖。失败返回空 JSON，不阻止请求或工具。
+- scripts/configure.mjs：只打印各客户端的 Hook/可选状态栏配置草案，不写入活动配置。
 - 核心 Hook 不依赖代理或特定操作系统。可选代理模式在 Hook 事件中短时读取明确指定的本机 Mihomo 接口，仅请求 /connections；支持 Windows 命名管道、macOS/Linux Unix socket、回环 HTTP，不会启动常驻进程。scripts/traffic.mjs 同样支持这些来源，保留为有限时长采样工具。
 - scripts/system-traffic.mjs：无需代理的系统网卡计数适配。Windows 使用 Get-NetAdapterStatistics；macOS 使用 netstat -ibn 的链路层字节行；Linux 使用 /proc/net/dev。明确选择一张接口，不合计物理和虚拟网卡。原生命令可能较慢，在独立的限时采样命令中执行，不接入每次模型请求的 Hook。
 - scripts/audit-rollout.mjs：对明确指定的本地会话文件做一次历史引导，只数顶层压缩记录，不把嵌套的继承历史重复计入；历史速度无可靠时间戳时不生成估计。
@@ -26,7 +30,7 @@
 
 ## 本地状态与采样开销
 
-状态目录由安装配置指定，建议 ~/.codex/context-traffic-guard-state；草案验证使用独立的 verification/。上下文按会话及可取得的代理标识分组。流量按来源、接口和计数段分别记录；报告采用最新来源，不跨来源求和。数据库保持兼容旧版 Mihomo 记录。
+状态目录由配置指定；新接入建议共用 ~/.context-traffic-guard，旧 Codex 的 ~/.codex/context-traffic-guard-state 保持兼容。测试用独立目录。上下文按客户端、自定义 source、会话及可取得的代理标识分组。流量属于所选机器接口而非某个客户端，按来源、接口和计数段分别记录；报告采用最新来源，不跨来源求和。数据库保留旧版数值记录并增量增加所需字段，不清空历史。
 
 可选代理自动模式使用 --sample-traffic，配合 --pipe、--socket 或 --endpoint 之一，在生命周期事件处读取累计流量，最多约每 500 毫秒更新一次；一次本地读取最多等待约 150 毫秒，不可达时留空，任务继续。HTTP 仅接受无认证信息的回环地址，不跟随重定向。没有自动常驻进程，不在空闲时持续轮询，也不因后台子进程拖住命令行退出。请求之间的总字节增量仍可测量，但进程细分采样下界可能较低。
 
@@ -36,7 +40,7 @@
 
 ## 安装前与接入验证
 
-需要 Node.js 24 或更新版本（内置 node:sqlite）与支持下列事件的 Codex Hooks。参考验证环境为 Windows、Node.js 24.22.1、Codex CLI 0.166.0-alpha.5.1；其他版本需核实事件支持。这不等于当前会话已收到回调。
+需要 Node.js 24 或更新版本（内置 node:sqlite）及所用客户端对应的事件或状态接口；通用 API 程序可自行发送 v1 事件。参考实时接入环境为 Windows、Node.js 24.22.1、Codex CLI 0.166.0-alpha.5.1。其他客户端的已实现适配契约、未提供指标与验证范围见 clients.md；不能把测试回放当作真实客户端已接入。
 
 Windows、macOS、Linux 都提供原生网卡适配；测试在 GitHub Actions 的三个操作系统上运行。测试覆盖数值解析、来源隔离、计数回退和执行环境中的真实网卡枚举；它不等于每个平台的 Codex 桌面应用都完成接入验证。实际 Codex Hooks + 代理自动采样目前仅在 Windows 验证；其他平台仍应按步骤验证事件可达。没有 Hooks 的纯聊天环境不能声明已持续采集。
 
@@ -48,12 +52,12 @@ Windows、macOS、Linux 都提供原生网卡适配；测试在 GitHub Actions �
 
 当前命令示例（实际执行时替换为已批准路径）：
 
-    node --no-warnings <skill>/scripts/guard.mjs report --session <会话ID> --state-dir <状态目录>
+    node --no-warnings <skill>/scripts/guard.mjs report --client <客户端> --session <原始会话ID> --state-dir <状态目录>
     node --no-warnings <skill>/scripts/audit-rollout.mjs --rollout <明确指定的会话文件>
     node --no-warnings <skill>/scripts/traffic.mjs --state-dir <状态目录> --pipe <本机命名管道> --seconds 10
     node --no-warnings <skill>/scripts/system-traffic.mjs list
     node --no-warnings <skill>/scripts/system-traffic.mjs sample --interface <单个网卡名> --state-dir <状态目录> --seconds 30
-    node --no-warnings --test <skill>/scripts/guard.test.mjs <skill>/scripts/system-traffic.test.mjs
+    node --no-warnings --test <skill>/scripts/guard.test.mjs <skill>/scripts/system-traffic.test.mjs <skill>/scripts/adapters.test.mjs
 
 回环 HTTP 示例：给可选代理 Hook 命令追加 `--sample-traffic --endpoint http://127.0.0.1:9090`；macOS/Linux Unix socket 示例为 `--sample-traffic --socket /absolute/path/controller.sock`。实际地址须由用户明确提供或确认，示例不代表本机已配置。如果 HTTP 要求认证而本工具无认证参数，报告不可用，不修改控制器的安全设置。
 
