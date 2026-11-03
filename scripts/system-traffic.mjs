@@ -59,7 +59,9 @@ export function parseMac(text) {
 
 export async function readSystemInterfaces({platform = process.platform} = {}) {
   if (platform === 'linux') return parseLinux(await readFile('/proc/net/dev', 'utf8'));
-  const options = {encoding:'utf8', timeout:10000, maxBuffer:1048576, windowsHide:true};
+  // Cold CIM/NetAdapter startup can exceed 10 seconds on busy Windows hosts.
+  // This collector runs independently of request hooks and remains time bounded.
+  const options = {encoding:'utf8', timeout:platform==='win32'?30000:10000, maxBuffer:1048576, windowsHide:true};
   if (platform === 'darwin') {
     const {stdout} = await execute('/usr/sbin/netstat', ['-ibn'], options);
     return parseMac(stdout);

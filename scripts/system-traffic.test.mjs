@@ -109,7 +109,7 @@ test('loopback API is read-only, does not follow redirects and validates counter
   } finally {server.closeAllConnections();await new Promise(r=>server.close(r));}
 });
 
-test('native adapter enumeration returns actual byte counters on the executing OS',{timeout:20000},async()=>{
+test('native adapter enumeration returns actual byte counters on the executing OS',{timeout:40000},async()=>{
   const rows=await readSystemInterfaces();
   assert(rows.length>0);
   for(const row of rows) {
