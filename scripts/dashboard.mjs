@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { realpathSync, readFileSync } from 'node:fs';
 import { resolve, join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
@@ -86,4 +86,4 @@ async function main() {
   process.stdout.write('Context Guard: http://127.0.0.1:'+port+'\nLocal read-only panel. Stop with Ctrl+C.\n');
   for(const signal of ['SIGINT','SIGTERM']) process.once(signal,()=>{server.closeAllConnections();server.close(()=>process.exit(0));});
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) main().catch(()=>{process.stderr.write('Context Guard: panel could not start. Check arguments or choose a free --port.\n');process.exitCode=1;});
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))) main().catch(()=>{process.stderr.write('Context Guard: panel could not start. Check arguments or choose a free --port.\n');process.exitCode=1;});

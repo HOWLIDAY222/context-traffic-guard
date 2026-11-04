@@ -38,7 +38,9 @@ if errorlevel 1 goto ctg_fail
 echo Preparing a private Node.js 24 runtime from nodejs.org. System PATH is unchanged.
 "%SystemRoot%\System32\curl.exe" --fail --silent --show-error --proto "=https" --tlsv1.2 --max-time 60 "https://nodejs.org/dist/latest-v24.x/SHASUMS256.txt" -o "%CTG_WORK%\SHASUMS256.txt"
 if errorlevel 1 goto ctg_fail
-"%SystemRoot%\System32\findstr.exe" /R /X /C:"[0-9a-f][0-9a-f]*  node-v24\.[0-9][0-9]*\.[0-9][0-9]*-win-%CTG_ARCH%\.zip" "%CTG_WORK%\SHASUMS256.txt" > "%CTG_WORK%\selected.txt"
+rem Normalize the official LF checksum list for FINDSTR /X on Windows.
+for /f "usebackq delims=" %%L in ("%CTG_WORK%\SHASUMS256.txt") do >>"%CTG_WORK%\checksums.txt" echo(%%L
+"%SystemRoot%\System32\findstr.exe" /R /X /C:"[0-9a-f][0-9a-f]*  node-v24\.[0-9][0-9]*\.[0-9][0-9]*-win-%CTG_ARCH%\.zip" "%CTG_WORK%\checksums.txt" > "%CTG_WORK%\selected.txt"
 set "CTG_MATCHES=0"
 for /f "usebackq tokens=1,2" %%H in ("%CTG_WORK%\selected.txt") do (
   set "CTG_EXPECTED=%%H"
@@ -67,7 +69,7 @@ if errorlevel 1 goto ctg_fail
 set "CTG_NODE=%CTG_DEST%\%CTG_PACKAGE%\node.exe"
 "%CTG_NODE%" -e "process.exit(Number(process.versions.node.split('.')[0])>=24?0:1)" >nul 2>&1
 if errorlevel 1 goto ctg_fail
-del /q "%CTG_WORK%\archive.zip" "%CTG_WORK%\SHASUMS256.txt" "%CTG_WORK%\selected.txt" "%CTG_WORK%\hash.txt" "%CTG_WORK%\digest.txt" >nul 2>&1
+del /q "%CTG_WORK%\archive.zip" "%CTG_WORK%\SHASUMS256.txt" "%CTG_WORK%\selected.txt" "%CTG_WORK%\checksums.txt" "%CTG_WORK%\hash.txt" "%CTG_WORK%\digest.txt" >nul 2>&1
 rmdir "%CTG_WORK%" >nul 2>&1
 :ctg_run
 "%CTG_NODE%" --no-warnings "%~dp0scripts\setup.mjs" %*

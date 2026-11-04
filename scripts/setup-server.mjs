@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'node:fs';
+import { realpathSync, readFileSync, writeFileSync, mkdirSync, renameSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDashboard } from './dashboard.mjs';
@@ -29,7 +29,7 @@ export async function serveSetup(options) {
   process.once('exit',()=>controller.stop());
   return {server,controller,info,stop};
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))) {
   const options=JSON.parse(readFileSync(process.argv[2],'utf8'));
   serveSetup(options).catch(()=>{process.stderr.write('Context Guard: setup panel could not start.\n');process.exitCode=1;});
 }

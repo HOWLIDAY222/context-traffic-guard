@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import http from 'node:http';
 import { resolve, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -122,5 +123,5 @@ async function main() {
     scope:'all local Mihomo traffic; process sampling spans all chats; short closed connections may be missed',
   },null,2));
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))
   main().catch(()=>{process.stderr.write('traffic sampler unavailable.\n');process.exitCode=1;});

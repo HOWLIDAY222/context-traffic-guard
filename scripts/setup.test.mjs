@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, chmodSync, symlinkSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -223,4 +223,14 @@ test('installed setup launches a real panel, reuses it on a second run, and expo
   assert((await fetch(info.url).then(r=>r.text())).includes('Context Guard'));
   const second=spawnSync(process.execPath,args,{encoding:'utf8',timeout:20000,windowsHide:true});assert.equal(second.status,0,second.stderr);
   const repeated=JSON.parse(second.stdout);assert(repeated.reused);assert(repeated.panel.reused);assert.equal(repeated.panel.pid,info.pid);
+});
+
+
+test('installed CLI entry points run through directory aliases without losing their output',async t=>{
+  const {home,options}=fixture(t);const result=await applySetupPlan(buildSetupPlan(options));assert(result.ok);
+  const alias=join(home,'skill alias');symlinkSync(join(home,'.context-traffic-guard','skill'),alias,process.platform==='win32'?'junction':'dir');
+  const plan=spawnSync(process.execPath,['--no-warnings',join(alias,'scripts/setup.mjs'),'--home',home,'--plan'],{encoding:'utf8',timeout:15000,windowsHide:true});
+  assert.equal(plan.status,0,plan.stderr);assert(JSON.parse(plan.stdout).can_apply);
+  const clients=spawnSync(process.execPath,['--no-warnings',join(alias,'scripts/guard.mjs'),'clients'],{encoding:'utf8',timeout:10000,windowsHide:true});
+  assert.equal(clients.status,0,clients.stderr);assert(clients.stdout.includes('codex'));
 });

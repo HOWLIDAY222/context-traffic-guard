@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import {resolve,dirname} from 'node:path';
 import {homedir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -51,5 +52,5 @@ function main() {
     stateDir:args['state-dir']??resolve(homedir(),'.context-traffic-guard'),node:args.node??process.execPath,shell:args.shell??'auto'});
   process.stdout.write(typeof output==='string'?output:JSON.stringify(output,null,2)+'\n');
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))
   try {main();} catch {process.stderr.write('configuration generation failed; check client, paths and --shell (posix/powershell/cmd). No settings were changed.\n');process.exitCode=1;}

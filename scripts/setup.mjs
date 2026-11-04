@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync, openSync, closeSync } from 'node:fs';
+import { realpathSync, existsSync, readFileSync, writeFileSync, mkdirSync, openSync, closeSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -73,4 +73,4 @@ async function main() {
     panel,trust:'请完成客户端自身要求的 Hook 审核；面板收到真实事件后才显示已接通。'},null,2)+'\n');
   if(!result.ok)process.exitCode=1;
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(error=>{process.stderr.write('Context Guard: '+error.message+'.\n');process.exitCode=1;});
+if(process.argv[1]&&realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url)))main().catch(error=>{process.stderr.write('Context Guard: '+error.message+'.\n');process.exitCode=1;});

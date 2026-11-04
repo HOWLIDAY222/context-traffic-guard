@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { realpathSync, mkdirSync, readFileSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -462,7 +462,7 @@ async function main() {
     } else throw new Error('use clients, hook, record, statusline, list-sessions or report');
   } finally {db.close();}
 }
-if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url)) {
+if(process.argv[1] && realpathSync(process.argv[1])===realpathSync(fileURLToPath(import.meta.url))) {
   main().catch(()=>{
     if(process.argv[2]==='hook') {
       process.stdout.write('{}');
