@@ -1,7 +1,7 @@
 interface:
   display_name: "会话负担监测与交接"
-  short_description: "跨 Agent 监测压缩、上下文、Token 与流量，按可用指标提醒交接"
-  default_prompt: "使用 $context-traffic-guard 识别当前 Agent 的接入方式，查看本会话可用指标，判断交接时机并准备摘要。"
+  short_description: "一键接入跨 Agent 监测与本地面板，按可用指标提醒交接"
+  default_prompt: "使用 $context-traffic-guard 自动识别并接入本机客户端，打开监测面板，检查当前会话并准备交接。"
 
 policy:
   allow_implicit_invocation: true

@@ -4,6 +4,8 @@
 
 ## 启动与选择会话
 
+首次接入推荐 [一键启动入口](setup.md)，自动检测客户端与已有数据目录、合并配置并打开浏览器。下面的 dashboard.mjs 命令用于已经接好数据、只需查看记录的情况。向导模式另外提供接入结果、备份恢复和自动采样控制；数据读取仍保持只读。
+
 在仓库或完整 Skill 目录运行：
 
 ```text
@@ -13,6 +15,8 @@ node --no-warnings scripts/dashboard.mjs --state-dir "<ABSOLUTE_STATE_DIR>"
 打开 http://127.0.0.1:43871 。默认监听 127.0.0.1，不开放局域网；端口已占用时可指定 --port 43873。服务只读取明确状态目录中的 metrics.sqlite，不扫描文件或聊天历史；目录不存在时显示接入引导，不创建数据库。该目录需先由已接入的采集器产生记录。旧 Codex 安装可能使用 ~/.codex/context-traffic-guard-state，新通用安装建议使用 ~/.context-traffic-guard；以自己的配置为准。
 
 默认由用户在左侧选择会话。明确知道当前原始 ID 时，可以绑定启动选择：
+
+向导发现多个既有数据目录时，左侧会显示数据目录选择器；各目录独立读取，任务草稿也分别保存，不把同名会话混合。向导会自动沿用当前客户端的已有目录，无需填写路径。
 
 ```text
 node --no-warnings scripts/dashboard.mjs --state-dir "<STATE_DIR>" --client claude --session "<RAW_SESSION_ID>"

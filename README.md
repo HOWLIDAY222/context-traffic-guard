@@ -13,6 +13,7 @@ Client-independent context monitoring and handoff assistance, with Codex, Claude
 - 使用兼容代理的用户还可选择本机 Mihomo 接口，支持命名管道、Unix socket 和回环 HTTP，采用事件采样，无自动常驻后台进程。
 - 合并重复提醒，在任务可恢复的阶段准备交接；采集失败不阻塞任务。
 - 本地监测面板提供会话选择、四类真实趋势、提醒依据与数据缺口，以及可编辑、复制和下载的交接摘要。读取记录不调用模型。
+- 一键入口自动检测系统与客户端、备份合并配置、准备必要的私有运行时、启动面板并请求浏览器打开；保留客户端自身的审核。
 
 ## 客户端支持
 
@@ -44,7 +45,27 @@ Client-independent context monitoring and handoff assistance, with Codex, Claude
 
 [三平台测试](https://github.com/HOWLIDAY222/context-traffic-guard/actions/workflows/test.yml)检查核心逻辑、客户端契约回放、CLI 输入输出、计数解析和真实网卡枚举。**协议回放不等于真实模型集成测试**：实时接入目前只有此前 Windows Codex 验证；Claude/Gemini/Grok 需在实际宿主中核对回调与显示。其他代理软件只有提供兼容接口时才能使用代理适配器，不保证任意软件都提供单进程流量。
 
-## 本地监测面板
+## 一键接入（推荐）
+
+安装完整 Skill 后，让支持本地操作的 Agent 首次启用它；也可直接启动：
+
+| 系统 | 启动入口 |
+| --- | --- |
+| Windows | 双击 Start-Context-Guard.cmd |
+| macOS | 双击 Start-Context-Guard.command |
+| Linux | 运行 start-context-guard.sh |
+
+向导自动识别客户端和数据目录、保留原配置并补全监测、启动面板与有限网卡采样。缺少 Node 24 时会下载并校验官方私有运行时，之后复用，无需改系统 PATH、安装 React 或配置 Clash。已有代理采样和历史目录继续沿用，多个独立数据目录可在页面切换。
+
+**安装目录本身不会自动执行代码。** 首次启用由 Agent 运行向导，或用户双击一次入口；客户端要求的 Hook 审核仍须正常完成。面板区分“配置已就绪”和“已收到事件”。详见 [一键接入与恢复](references/setup.md)。
+
+已有 Node 24 的命令行等价入口：
+
+```sh
+node --no-warnings scripts/setup.mjs
+```
+
+## 本地监测面板（只读启动）
 
 仓库附带预构建界面，只需 Node.js 24，无需安装 React、Clash 或前端开发工具。在仓库目录运行：
 
@@ -58,15 +79,15 @@ node --no-warnings scripts/dashboard.mjs --state-dir "<STATE_DIR>"
 - **诊断与依据**：展示观测信号、数据缺口、覆盖范围与下一步；不能仅凭一次高用量确定原因。
 - **交接工作台**：当前 Agent 可提供绑定会话的任务草稿，也可手动编辑；监测信息自动带入，复制或下载 Markdown 后交给新对话。
 
-面板仅监听本机回环，默认每 5 秒读一次本地记录，可暂停；不修改 Hooks、不启动流量采样、不自动切换对话。停止启动命令即可关闭服务。明确选择当前窗口、传入 Agent 草稿及开发构建方法见 [面板说明](references/dashboard.md)。
+这个直接启动方式只读取记录，默认每 5 秒刷新，可暂停；不修改 Hooks、不启动流量采样。首次接入优先使用上方一键入口。面板仅监听本机回环，不自动切换对话。明确选择当前窗口、传入 Agent 草稿及开发构建方法见 [面板说明](references/dashboard.md)。
 
-## 安装与接入 Skill
+## 手工接入（高级）
 
 1. 克隆仓库，按 [客户端目录表](references/clients.md#安装-skill) 放置完整 Skill。若目录已有内容，先备份并比较。
 2. 先运行测试：
 
    ```sh
-   node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs
+   node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs scripts/setup.test.mjs
    ```
 
 3. 使用配置生成器选择客户端并打印草案。例如 Claude Code：

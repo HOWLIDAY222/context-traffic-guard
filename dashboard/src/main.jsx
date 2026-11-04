@@ -2,54 +2,57 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { bytes, clientName, compact, duration, fields, makeHandoff, num, time, trafficLabel } from './format.mjs';
 import './style.css';
+import SetupPanel from './SetupPanel.jsx';
 
 function Icon({name,size=19,...props}) {
   const paths={pulse:<path d="M3 12h5l3-8 4 16 3-8h3"/>,grid:<><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></>,diagnose:<><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5M7 11h2l1.5-3 2 6 1.5-3"/></>,file:<><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9zM14 3v6h6M8 13h8M8 17h5"/></>,help:<><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 0 1 5 .5c0 2-2.5 2-2.5 4M12 17h.01"/></>,refresh:<><path d="M20 7v5h-5M4 17v-5h5"/><path d="M6.1 6.1A8 8 0 0 1 20 12M4 12a8 8 0 0 0 13.9 5.9"/></>,arrow:<path d="M5 12h14m-5-5 5 5-5 5"/>,copy:<><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></>,download:<path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/>,check:<path d="m5 12 4 4L19 6"/>,pause:<path d="M8 5v14M16 5v14"/>,play:<path d="m8 4 12 8-12 8z"/>,chevron:<path d="m8 5 7 7-7 7"/>,alert:<><path d="m12 3 10 18H2zM12 9v5M12 17h.01"/></>};
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>{paths[name]??paths.pulse}</svg>;
 }
-const pages=[['overview','grid','会话总览'],['diagnostics','diagnose','诊断与依据'],['handoff','file','交接工作台'],['help','help','接入说明']];
-function useMonitor(key,setKey,minutes,auto,epoch) {
+const pages=[['overview','grid','会话总览'],['setup','pulse','接入向导'],['diagnostics','diagnose','诊断与依据'],['handoff','file','交接工作台'],['help','help','接入说明']];
+function useMonitor(key,setKey,minutes,auto,epoch,source,setSource) {
   const [bootstrap,setBootstrap]=useState(null),[payload,setPayload]=useState(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
   useEffect(()=>{
     const controller=new AbortController();let timer;
     async function read(path) {
       const res=await fetch(path,{signal:controller.signal});
       const data=await res.json();
-      if(!res.ok) throw new Error(data.message??'本地数据暂不可读，请刷新重试。');
+      if(!res.ok){const error=new Error(data.message??'本地数据暂不可读，请刷新重试。');error.code=data.code;throw error;}
       return data;
     }
     async function tick() {
       setBusy(true);
       try {
-        const boot=await read('/api/bootstrap');
+        const boot=await read('/api/bootstrap'+(source?'?source='+encodeURIComponent(source):''));
         if(controller.signal.aborted) return;
         setBootstrap(boot);
+        if(!source&&boot.active_source){setSource(boot.active_source);return;}
         if(!key&&boot.initial_key) {setKey(boot.initial_key);return;}
         if(key&&boot.ok) {
-          const data=await read('/api/session?key='+encodeURIComponent(key)+'&minutes='+minutes);
+          const data=await read('/api/session?key='+encodeURIComponent(key)+'&minutes='+minutes+'&source='+encodeURIComponent(source));
           if(controller.signal.aborted) return;
           if(!data.ok) throw new Error(data.message??'采集状态暂不可用。');
-          setPayload({key,data});
+          setPayload({key,data,source});
         }
         if(!boot.ok) setPayload(null);
         setError('');
-      } catch(e) {if(!controller.signal.aborted) setError(e.message);}
+      } catch(e) {if(!controller.signal.aborted){if(e.code==='unknown_state_source'){setSource('');setKey('');setPayload(null);setError('');}else setError(e.message);}}
       finally {
         if(!controller.signal.aborted) {setBusy(false);if(auto) timer=setTimeout(tick,5000);}
       }
     }
     tick();
     return ()=>{controller.abort();clearTimeout(timer);};
-  },[key,setKey,minutes,auto,epoch]);
-  return {bootstrap,data:payload?.key===key?payload.data:null,error,busy};
+  },[key,setKey,minutes,auto,epoch,source,setSource]);
+  return {bootstrap,data:payload?.key===key&&payload?.source===source?payload.data:null,error,busy};
 }
-function Sidebar({page,setPage,bootstrap,selection,setSelection}) {
+function Sidebar({page,setPage,bootstrap,selection,setSelection,source,setSource}) {
   const [filter,setFilter]=useState('all');
   const sessions=(bootstrap?.sessions??[]).filter(s=>filter==='all'||s.client===filter);
   return <aside className="sidebar">
     <div className="brand"><span className="brand-mark"><Icon name="pulse" size={23}/></span><span>Context Guard<small>会话监测与交接</small></span></div>
     <nav aria-label="主导航">{pages.map(([key,icon,label])=><button key={key} className={'nav-item '+(page===key?'active':'')} aria-current={page===key?'page':undefined} onClick={()=>setPage(key)}><Icon name={icon}/>{label}{page===key&&<span className="nav-dot"/>}</button>)}</nav>
     <div className="session-heading"><span>已记录会话</span><span>{bootstrap?.sessions?.length??0}</span></div>
+    {bootstrap?.state_sources?.length>1&&<><label className="sr-only" htmlFor="state-source">监测数据目录</label><select id="state-source" value={source} onChange={e=>{setSelection('');setSource(e.target.value);}}>{bootstrap.state_sources.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select></>}
     <label className="sr-only" htmlFor="client-filter">按客户端筛选</label><select id="client-filter" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">全部客户端</option>{['codex','claude','gemini','grok','generic'].map(c=><option key={c} value={c}>{clientName(c)}</option>)}</select>
     <div className="session-list" aria-label="选择会话">{sessions.map(s=><button key={s.key} className={'session '+(selection===s.key?'selected':'')} onClick={()=>setSelection(s.key)} aria-pressed={selection===s.key} title={s.raw_session+' · '+s.agent}>
       <span className={'session-logo '+s.client}>{clientName(s.client).slice(0,1)}</span><span className="session-text"><strong>{clientName(s.client)}{s.client==='generic'&&s.source?' · '+s.source:''}</strong><small>{s.raw_session.slice(0,8)}…{s.raw_session.slice(-4)}</small><small>{s.agent!=='root'?s.agent+' · ':''}{time(s.activity,true)}</small></span>
@@ -118,18 +121,18 @@ function Handoff({data,draft,onChange,onSeed}) {
   }
   return <><div className="section-intro"><h2>让下一个对话接得上</h2><p>监测信息自动带入；任务进度由当前 Agent 提供或在这里补充。复制前核对已验证状态。</p></div><div className="handoff-grid"><section className="panel draft-panel"><div className="panel-head"><h2>任务进度</h2>{data.seed.status==='matched'&&<button className="text-button" onClick={()=>{onSeed(data.seed.fields);setNotice('已载入当前会话的 Agent 草稿，请核对。');}}>载入 Agent 草稿</button>}</div>{fields.map(([key,label])=><label className="draft-field" key={key}><span>{label}</span><textarea maxLength="8000" rows={key==='completed'||key==='next'?4:3} value={draft[key]??''} onChange={e=>onChange(key,e.target.value)} placeholder={{goal:'要完成什么？范围到哪里？',completed:'写清实际完成内容、验证结果及尚未验证的部分。',next:'下一项具体动作、未解决的问题与阻碍。',files:'项目路径、产物、分支、未提交修改及仍在运行的服务。',constraints:'已经授权的范围、需要保留的成果、失败路径与关键约束。'}[key]}/></label>)}<p className="draft-note">草稿仅保留在本页内存；关闭或刷新页面前请复制或下载。</p>{data.seed.status==='different_session'&&<p className="inline-warning">启动时提供的 Agent 草稿属于另一个会话，未载入。</p>}</section><section className="panel preview-panel"><div className="panel-head"><h2>交接摘要预览</h2><div className="actions"><button className="icon-button" aria-label="下载交接摘要" title="下载 .md" onClick={download}><Icon name="download"/></button><button className="button primary" onClick={copy}><Icon name="copy" size={16}/>复制摘要</button></div></div><div className="copy-notice" role="status">{notice||'生成的摘要包含来源、数据覆盖与未知指标。'}</div><pre tabIndex="0" aria-label="交接摘要预览">{markdown}</pre></section></div></>;
 }
-function Help({bootstrap}) {
-  return <><div className="section-intro"><h2>接好事件，再看真实数据</h2><p>面板读取已采集记录。各客户端能提供的指标不同，缺失字段保持未知。</p></div><section className="panel help-panel"><h3>1. 安装 Skill，接入对应客户端</h3><p>支持 Codex、Claude Code、Gemini CLI、Grok；自建 Agent 可使用 v1 事件接口。仅放置 SKILL.md 不会自动产生监测数据。</p><a href="https://github.com/HOWLIDAY222/context-traffic-guard/blob/main/references/clients.md" target="_blank" rel="noreferrer">查看客户端接入说明<Icon name="arrow" size={16}/></a><h3>2. 指定本地状态目录启动面板</h3><pre>node --no-warnings scripts/dashboard.mjs --state-dir "&lt;STATE_DIR&gt;"</pre><p>当前读取目录：<code>{bootstrap?.state_path??'等待连接'}</code>。通过启动参数更换目录；面板不会扫描客户端历史、修改 Hook 或发起模型请求。</p><h3>3. 流量需要一个实际采样来源</h3><pre>node --no-warnings scripts/system-traffic.mjs list{'\n'}node --no-warnings scripts/system-traffic.mjs sample --interface "&lt;网卡名&gt;" --state-dir "&lt;STATE_DIR&gt;" --seconds 300</pre><p>Windows、macOS、Linux 均支持系统网卡来源。只选择一张实际网卡，所有程序的流量都会包含在内；不把物理网卡与 VPN/TUN 相加。已有兼容代理事件采样也可直接显示。</p><h3>4. 把任务进度带到交接工作台</h3><p>可手动填写。当前 Agent 也可将本会话的任务摘要写入指定 JSON 文件，再以 --handoff 指向它。绑定不匹配时不载入；面板不读取聊天正文，也不调用模型生成内容。</p><a href="https://github.com/HOWLIDAY222/context-traffic-guard/blob/main/references/dashboard.md" target="_blank" rel="noreferrer">查看面板与交接格式<Icon name="arrow" size={16}/></a></section></>;
+function Help({bootstrap,onSetup}) {
+  return <><div className="section-intro"><h2>接好事件，再看真实数据</h2><p>面板读取已采集记录。各客户端能提供的指标不同，缺失字段保持未知。</p></div><section className="panel help-panel"><h3>首次接入：交给向导完成</h3><p>首次启用时，让 Agent 运行接入向导，或双击 Skill 文件夹中的系统启动入口。向导自动检测、备份合并并打开面板；客户端要求的审核仍正常完成。</p><button className="button primary" onClick={onSetup}>打开接入向导</button><details className="advanced-help"><summary>高级：手工接入与独立采样</summary><h3>1. 安装 Skill，接入对应客户端</h3><p>支持 Codex、Claude Code、Gemini CLI、Grok；自建 Agent 可使用 v1 事件接口。仅放置 SKILL.md 不会自动产生监测数据。</p><a href="https://github.com/HOWLIDAY222/context-traffic-guard/blob/main/references/clients.md" target="_blank" rel="noreferrer">查看客户端接入说明<Icon name="arrow" size={16}/></a><h3>2. 指定本地状态目录启动面板</h3><pre>node --no-warnings scripts/dashboard.mjs --state-dir "&lt;STATE_DIR&gt;"</pre><p>当前读取目录：<code>{bootstrap?.state_path??'等待连接'}</code>。通过启动参数更换目录；面板不会扫描客户端历史、修改 Hook 或发起模型请求。</p><h3>3. 流量需要一个实际采样来源</h3><pre>node --no-warnings scripts/system-traffic.mjs list{'\n'}node --no-warnings scripts/system-traffic.mjs sample --interface "&lt;网卡名&gt;" --state-dir "&lt;STATE_DIR&gt;" --seconds 300</pre><p>Windows、macOS、Linux 均支持系统网卡来源。只选择一张实际网卡，所有程序的流量都会包含在内；不把物理网卡与 VPN/TUN 相加。已有兼容代理事件采样也可直接显示。</p><h3>4. 把任务进度带到交接工作台</h3><p>可手动填写。当前 Agent 也可将本会话的任务摘要写入指定 JSON 文件，再以 --handoff 指向它。绑定不匹配时不载入；面板不读取聊天正文，也不调用模型生成内容。</p><a href="https://github.com/HOWLIDAY222/context-traffic-guard/blob/main/references/dashboard.md" target="_blank" rel="noreferrer">查看面板与交接格式<Icon name="arrow" size={16}/></a></details></section></>;
 }
 function App() {
-  const [page,setPage]=useState('overview'),[key,setKey]=useState(''),[minutes,setMinutes]=useState(30),[auto,setAuto]=useState(true),[epoch,setEpoch]=useState(0),[drafts,setDrafts]=useState({});
-  const {bootstrap,data,error,busy}=useMonitor(key,setKey,minutes,auto,epoch);
-  const changeField=useCallback((field,value)=>setDrafts(prev=>({...prev,[key]:{...(prev[key]??{}),[field]:value}})),[key]);
-  useEffect(()=>{if(data?.seed.status==='matched')setDrafts(prev=>Object.hasOwn(prev,key)?prev:{...prev,[key]:data.seed.fields});},[data?.seed.status,key]);
+  const [page,setPage]=useState(()=>new URL(location.href).searchParams.has('setup')?'setup':'overview'),[key,setKey]=useState(''),[minutes,setMinutes]=useState(30),[auto,setAuto]=useState(true),[epoch,setEpoch]=useState(0),[drafts,setDrafts]=useState({}),[source,setSource]=useState('');
+  const {bootstrap,data,error,busy}=useMonitor(key,setKey,minutes,auto,epoch,source,setSource),draftKey=source+':'+key;
+  const changeField=useCallback((field,value)=>setDrafts(prev=>({...prev,[draftKey]:{...(prev[draftKey]??{}),[field]:value}})),[draftKey]);
+  useEffect(()=>{if(data?.seed.status==='matched')setDrafts(prev=>Object.hasOwn(prev,draftKey)?prev:{...prev,[draftKey]:data.seed.fields});},[data?.seed.status,draftKey]);
   const selected=bootstrap?.sessions?.find(s=>s.key===key);
-  return <div className="app"><Sidebar page={page} setPage={setPage} bootstrap={bootstrap} selection={key} setSelection={setKey}/><main><header className="topbar"><div className="breadcrumb">本地工作区<Icon name="chevron" size={13}/><span>{pages.find(p=>p[0]===page)[2]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label={auto?'暂停自动刷新':'恢复自动刷新'} title={auto?'暂停自动刷新':'恢复自动刷新'} aria-pressed={!auto} onClick={()=>setAuto(v=>!v)}><Icon name={auto?'pause':'play'} size={16}/></button><span className="refresh-label">{auto?'每 5 秒刷新':'刷新已暂停'}</span><span className="topbar-divider"/><button className="icon-button" aria-label="刷新数据" onClick={()=>setEpoch(v=>v+1)}><Icon name="refresh" size={17} className={busy?'spinning':''}/></button></div></header><div className="content"><div className="page-heading"><div><h1>{pages.find(p=>p[0]===page)[2]}</h1><p>{selected?clientName(selected.client)+' · '+selected.raw_session.slice(0,8)+'…'+selected.raw_session.slice(-4)+' · '+selected.agent:'从一个明确的会话开始，查看记录并准备下一步。'}</p></div><div className="heading-actions">{data&&<span className="updated">更新于 {time(data.generated_at)}</span>}{page!=='handoff'&&data&&<button className="button primary" onClick={()=>setPage('handoff')}>整理交接<Icon name="arrow" size={16}/></button>}</div></div>
+  return <div className="app"><Sidebar page={page} setPage={setPage} bootstrap={bootstrap} selection={key} setSelection={setKey} source={source} setSource={setSource}/><main><header className="topbar"><div className="breadcrumb">本地工作区<Icon name="chevron" size={13}/><span>{pages.find(p=>p[0]===page)[2]}</span></div><div className="topbar-actions"><button className="icon-button" aria-label={auto?'暂停自动刷新':'恢复自动刷新'} title={auto?'暂停自动刷新':'恢复自动刷新'} aria-pressed={!auto} onClick={()=>setAuto(v=>!v)}><Icon name={auto?'pause':'play'} size={16}/></button><span className="refresh-label">{auto?'每 5 秒刷新':'刷新已暂停'}</span><span className="topbar-divider"/><button className="icon-button" aria-label="刷新数据" onClick={()=>setEpoch(v=>v+1)}><Icon name="refresh" size={17} className={busy?'spinning':''}/></button></div></header><div className="content"><div className="page-heading"><div><h1>{pages.find(p=>p[0]===page)[2]}</h1><p>{selected?clientName(selected.client)+' · '+selected.raw_session.slice(0,8)+'…'+selected.raw_session.slice(-4)+' · '+selected.agent:'从一个明确的会话开始，查看记录并准备下一步。'}</p></div><div className="heading-actions">{data&&<span className="updated">更新于 {time(data.generated_at)}</span>}{page!=='handoff'&&page!=='setup'&&data&&<button className="button primary" onClick={()=>setPage('handoff')}>整理交接<Icon name="arrow" size={16}/></button>}</div></div>
     {error&&<div className="error-banner" role="alert">{error} {data?'页面保留的是上次成功读取的数据。':''}</div>}
-    {page==='help'?<Help bootstrap={bootstrap}/>:!data?<Empty bootstrap={bootstrap} selection={key} busy={busy} setPage={setPage}/>:page==='overview'?<><Metrics report={data.report}/><div className="overview-grid"><Trends data={data} minutes={minutes} setMinutes={setMinutes}/><Decision data={data} setPage={setPage}/></div><Requests key={key} data={data}/></>:page==='diagnostics'?<Diagnostics data={data}/>:<Handoff key={key} data={data} draft={drafts[key]??{}} onChange={changeField} onSeed={fields=>setDrafts(prev=>({...prev,[key]:fields}))}/>}
+    {page==='setup'?<SetupPanel bootstrap={bootstrap} onChanged={()=>setEpoch(v=>v+1)}/>:page==='help'?<Help bootstrap={bootstrap} onSetup={()=>setPage('setup')}/>:!data?<Empty bootstrap={bootstrap} selection={key} busy={busy} setPage={setPage}/>:page==='overview'?<><Metrics report={data.report}/><div className="overview-grid"><Trends data={data} minutes={minutes} setMinutes={setMinutes}/><Decision data={data} setPage={setPage}/></div><Requests key={draftKey} data={data}/></>:page==='diagnostics'?<Diagnostics data={data}/>:<Handoff key={draftKey} data={data} draft={drafts[draftKey]??{}} onChange={changeField} onSeed={fields=>setDrafts(prev=>({...prev,[draftKey]:fields}))}/>}
     <footer className="main-footer"><span>Context Guard</span><span>仅访问本机 · 缺失指标保留未知 · 不自动切换对话</span></footer></div></main></div>;
 }
 createRoot(document.getElementById('root')).render(<App/>);

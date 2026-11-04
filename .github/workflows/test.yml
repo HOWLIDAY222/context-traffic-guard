@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-15-intel, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
@@ -23,10 +23,14 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - run: node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs
+      - run: node --no-warnings --test scripts/guard.test.mjs scripts/system-traffic.test.mjs scripts/adapters.test.mjs scripts/dashboard.test.mjs scripts/setup.test.mjs
+      - name: Verify first launch without an existing Node runtime
+        env:
+          CTG_TEST_BOOTSTRAP_DOWNLOAD: '1'
+        run: node --no-warnings --test scripts/bootstrap.test.mjs
       - name: Rebuild distributed dashboard
         if: matrix.os == 'ubuntu-latest'
         run: |
           npx --yes pnpm@11.25.0 install --frozen-lockfile --ignore-scripts
           npx --yes pnpm@11.25.0 build
-          git diff --exit-code -- dashboard/dist
+          git diff --exit-code -- dashboard/dist vendor
